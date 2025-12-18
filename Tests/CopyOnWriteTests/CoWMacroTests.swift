@@ -1,5 +1,6 @@
 // CoWMacroTests.swift
 
+import Foundation
 import Testing
 import CopyOnWrite
 
@@ -33,6 +34,25 @@ struct WithPrivateSet {
 struct FullNamedMacro {
     var name: String
     var count: Int = 0
+}
+
+// Test types with protocol conformances
+@CoW
+struct EquatablePoint: Equatable {
+    var x: Int
+    var y: Int
+}
+
+@CoW
+struct HashablePoint: Hashable {
+    var x: Int
+    var y: Int
+}
+
+@CoW
+struct CodablePerson: Codable {
+    var name: String
+    var age: Int
 }
 
 // MARK: - Tests
@@ -167,5 +187,118 @@ struct CopyOnWriteTests {
         #expect(f1.count == 5)
         #expect(f2.name == "Test")
         #expect(f2.count == 0)
+    }
+
+    // MARK: - isIdentical(to:) Tests
+
+    @Test("isIdentical returns true for shared storage")
+    func isIdenticalSharedStorage() {
+        let p1 = Point(x: 10, y: 20)
+        let p2 = p1
+
+        // Before mutation, should share storage
+        #expect(p1.isIdentical(to: p2))
+    }
+
+    @Test("isIdentical returns false after mutation")
+    func isIdenticalAfterMutation() {
+        var p1 = Point(x: 10, y: 20)
+        let p2 = p1
+
+        // Mutate p1, which triggers copy
+        p1.x = 100
+
+        // Should no longer share storage
+        #expect(!p1.isIdentical(to: p2))
+    }
+
+    // MARK: - Equatable Tests
+
+    @Test("Equatable conformance works")
+    func equatableConformance() {
+        let p1 = EquatablePoint(x: 10, y: 20)
+        let p2 = EquatablePoint(x: 10, y: 20)
+        let p3 = EquatablePoint(x: 10, y: 30)
+
+        #expect(p1 == p2)
+        #expect(p1 != p3)
+    }
+
+    @Test("Equatable works with copies")
+    func equatableWithCopies() {
+        var p1 = EquatablePoint(x: 10, y: 20)
+        let p2 = p1
+
+        // Should be equal (same values)
+        #expect(p1 == p2)
+
+        // Mutate p1
+        p1.x = 100
+
+        // Should not be equal (different values)
+        #expect(p1 != p2)
+    }
+
+    // MARK: - Hashable Tests
+
+    @Test("Hashable conformance works")
+    func hashableConformance() {
+        let p1 = HashablePoint(x: 10, y: 20)
+        let p2 = HashablePoint(x: 10, y: 20)
+        let p3 = HashablePoint(x: 10, y: 30)
+
+        #expect(p1.hashValue == p2.hashValue)
+        #expect(p1.hashValue != p3.hashValue)
+    }
+
+    @Test("Hashable works in Set")
+    func hashableInSet() {
+        let p1 = HashablePoint(x: 10, y: 20)
+        let p2 = HashablePoint(x: 10, y: 20)
+        let p3 = HashablePoint(x: 30, y: 40)
+
+        var set: Set<HashablePoint> = [p1, p2, p3]
+        #expect(set.count == 2)  // p1 and p2 are equal
+
+        set.insert(HashablePoint(x: 50, y: 60))
+        #expect(set.count == 3)
+    }
+
+    // MARK: - Codable Tests
+
+    @Test("Encodable conformance works")
+    func encodableConformance() throws {
+        let person = CodablePerson(name: "Alice", age: 30)
+        let encoder = JSONEncoder()
+        let data = try encoder.encode(person)
+        let json = String(data: data, encoding: .utf8)!
+
+        #expect(json.contains("\"name\":\"Alice\"") || json.contains("\"name\": \"Alice\""))
+        #expect(json.contains("\"age\":30") || json.contains("\"age\": 30"))
+    }
+
+    @Test("Decodable conformance works")
+    func decodableConformance() throws {
+        let json = #"{"name":"Bob","age":25}"#
+        let data = json.data(using: .utf8)!
+        let decoder = JSONDecoder()
+        let person = try decoder.decode(CodablePerson.self, from: data)
+
+        #expect(person.name == "Bob")
+        #expect(person.age == 25)
+    }
+
+    @Test("Codable round-trip works")
+    func codableRoundTrip() throws {
+        let original = CodablePerson(name: "Charlie", age: 35)
+
+        let encoder = JSONEncoder()
+        let data = try encoder.encode(original)
+
+        let decoder = JSONDecoder()
+        let decoded = try decoder.decode(CodablePerson.self, from: data)
+
+        #expect(decoded.name == original.name)
+        #expect(decoded.age == original.age)
     }
 }

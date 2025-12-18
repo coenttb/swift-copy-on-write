@@ -68,13 +68,15 @@
 /// - **Lazy copying**: Storage only copied when needed
 /// - **Sendable by default**: Generated Storage is `@unchecked Sendable`
 ///
-@attached(member, names: named(Storage), named(storage), named(ensureUnique), named(init))
+@attached(member, names: named(Storage), named(storage), named(ensureUnique), named(init), named(isIdentical))
 @attached(memberAttribute)
+@attached(extension, conformances: Equatable, Hashable, Decodable, Encodable, names: named(==), named(hash), named(encode), named(init), named(CodingKeys))
 public macro `Copy on Write`() = #externalMacro(module: "CopyOnWriteMacros", type: "CoWMacro")
 
 /// Short alias for `@Copy on Write` macro.
-@attached(member, names: named(Storage), named(storage), named(ensureUnique), named(init))
+@attached(member, names: named(Storage), named(storage), named(ensureUnique), named(init), named(isIdentical))
 @attached(memberAttribute)
+@attached(extension, conformances: Equatable, Hashable, Decodable, Encodable, names: named(==), named(hash), named(encode), named(init), named(CodingKeys))
 public macro CoW() = #externalMacro(module: "CopyOnWriteMacros", type: "CoWMacro")
 
 /// Internal macro applied to properties by @`Copy on Write` to provide accessor implementations.

@@ -64,12 +64,195 @@ extension CoWMacro: MemberMacro {
         // Generate initializer (only var properties)
         let initializer = generateInitializer(properties: varProperties)
 
+        // Generate isIdentical(to:) method
+        let structName = structDecl.name.text
+        let isIdentical: DeclSyntax = """
+            /// Returns true if this value and the other value share the same underlying storage.
+            /// This can be useful for debugging or testing Copy-on-Write behavior.
+            public func isIdentical(to other: \(raw: structName)) -> Bool {
+                storage === other.storage
+            }
+            """
+
         return [
             storageClass,
             storageProperty,
             ensureUnique,
             initializer,
+            isIdentical,
         ]
+    }
+}
+
+// MARK: - ExtensionMacro
+
+extension CoWMacro: ExtensionMacro {
+    public static func expansion(
+        of node: AttributeSyntax,
+        attachedTo declaration: some DeclGroupSyntax,
+        providingExtensionsOf type: some TypeSyntaxProtocol,
+        conformingTo protocols: [TypeSyntax],
+        in context: some MacroExpansionContext
+    ) throws -> [ExtensionDeclSyntax] {
+        guard let structDecl = declaration.as(StructDeclSyntax.self) else {
+            return []
+        }
+
+        // Extract stored properties
+        let properties = extractStoredProperties(from: structDecl)
+        let varProperties = properties.filter { $0.isVar }
+
+        guard !varProperties.isEmpty else {
+            return []
+        }
+
+        // Check which protocols the struct wants to conform to
+        let inheritedTypes = structDecl.inheritanceClause?.inheritedTypes.map {
+            $0.type.trimmedDescription
+        } ?? []
+
+        var extensions: [ExtensionDeclSyntax] = []
+
+        // Generate Equatable extension if requested
+        let wantsEquatable = inheritedTypes.contains("Equatable")
+        let wantsHashable = inheritedTypes.contains("Hashable")
+
+        if wantsEquatable || wantsHashable {
+            // If struct declares Equatable explicitly, don't re-declare conformance
+            // If struct only declares Hashable, we need to add Equatable conformance
+            let declareEquatableConformance = !wantsEquatable && wantsHashable
+            let equatableExt = try generateEquatableExtension(
+                typeName: type,
+                properties: varProperties,
+                declareConformance: declareEquatableConformance
+            )
+            extensions.append(equatableExt)
+        }
+
+        // Generate Hashable extension if requested
+        if wantsHashable {
+            let hashableExt = try generateHashableExtension(
+                typeName: type,
+                properties: varProperties
+            )
+            extensions.append(hashableExt)
+        }
+
+        // Generate Codable extension if requested
+        let wantsCodable = inheritedTypes.contains("Codable")
+        let wantsEncodable = inheritedTypes.contains("Encodable") || wantsCodable
+        let wantsDecodable = inheritedTypes.contains("Decodable") || wantsCodable
+
+        if wantsEncodable || wantsDecodable {
+            let codableExt = try generateCodableExtension(
+                typeName: type,
+                properties: varProperties,
+                includeEncodable: wantsEncodable,
+                includeDecodable: wantsDecodable
+            )
+            extensions.append(codableExt)
+        }
+
+        return extensions
+    }
+}
+
+private func generateEquatableExtension(
+    typeName: some TypeSyntaxProtocol,
+    properties: [StoredProperty],
+    declareConformance: Bool
+) throws -> ExtensionDeclSyntax {
+    let comparisons = properties.map { prop in
+        "lhs.\(prop.name) == rhs.\(prop.name)"
+    }.joined(separator: " && ")
+
+    // Only declare conformance if struct doesn't already declare Equatable
+    // (e.g., when struct declares Hashable which implies Equatable)
+    if declareConformance {
+        return try ExtensionDeclSyntax("extension \(typeName): Equatable") {
+            """
+            public static func == (lhs: \(typeName), rhs: \(typeName)) -> Bool {
+                \(raw: comparisons)
+            }
+            """
+        }
+    } else {
+        return try ExtensionDeclSyntax("extension \(typeName)") {
+            """
+            public static func == (lhs: \(typeName), rhs: \(typeName)) -> Bool {
+                \(raw: comparisons)
+            }
+            """
+        }
+    }
+}
+
+private func generateHashableExtension(
+    typeName: some TypeSyntaxProtocol,
+    properties: [StoredProperty]
+) throws -> ExtensionDeclSyntax {
+    let hashStatements = properties.map { prop in
+        "hasher.combine(\(prop.name))"
+    }.joined(separator: "\n            ")
+
+    // Don't re-declare conformance - struct already declares it
+    return try ExtensionDeclSyntax("extension \(typeName)") {
+        """
+        public func hash(into hasher: inout Hasher) {
+            \(raw: hashStatements)
+        }
+        """
+    }
+}
+
+private func generateCodableExtension(
+    typeName: some TypeSyntaxProtocol,
+    properties: [StoredProperty],
+    includeEncodable: Bool,
+    includeDecodable: Bool
+) throws -> ExtensionDeclSyntax {
+    let codingKeys = properties.map { prop in
+        "case \(prop.name)"
+    }.joined(separator: "\n            ")
+
+    // Don't re-declare conformance - struct already declares it
+    return try ExtensionDeclSyntax("extension \(typeName)") {
+        """
+        private enum CodingKeys: String, CodingKey {
+            \(raw: codingKeys)
+        }
+        """
+
+        if includeEncodable {
+            let encodeStatements = properties.map { prop in
+                "try container.encode(\(prop.name), forKey: .\(prop.name))"
+            }.joined(separator: "\n            ")
+
+            """
+            public func encode(to encoder: Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                \(raw: encodeStatements)
+            }
+            """
+        }
+
+        if includeDecodable {
+            let decodeStatements = properties.map { prop in
+                "let \(prop.name) = try container.decode(\(prop.type).self, forKey: .\(prop.name))"
+            }.joined(separator: "\n            ")
+
+            let initArgs = properties.map { prop in
+                "\(prop.name): \(prop.name)"
+            }.joined(separator: ", ")
+
+            """
+            public init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                \(raw: decodeStatements)
+                self.init(\(raw: initArgs))
+            }
+            """
+        }
     }
 }
 

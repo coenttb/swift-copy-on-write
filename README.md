@@ -95,6 +95,45 @@ public struct Context {
 - **Supports `private(set) var`** - Use `private(set) var` for read-only properties with CoW
 - **Sendable by default** - Generated Storage is `@unchecked Sendable`
 - **Minimal stack footprint** - Only 8 bytes on the stack (single reference)
+- **Protocol synthesis** - Automatically implements `Equatable`, `Hashable`, and `Codable` when declared
+- **Storage identity checking** - `isIdentical(to:)` method to check if two values share storage
+
+## Protocol Conformances
+
+When your struct declares conformance to `Equatable`, `Hashable`, or `Codable`, the macro automatically generates the required implementations:
+
+```swift
+@CoW
+struct Person: Hashable, Codable {
+    var name: String
+    var age: Int
+}
+
+// Now you can:
+let p1 = Person(name: "Alice", age: 30)
+let p2 = Person(name: "Alice", age: 30)
+
+p1 == p2           // true (Equatable)
+p1.hashValue       // works (Hashable)
+
+let data = try JSONEncoder().encode(p1)  // works (Encodable)
+let decoded = try JSONDecoder().decode(Person.self, from: data)  // works (Decodable)
+```
+
+## Checking Storage Identity
+
+The `isIdentical(to:)` method lets you check if two values share the same underlying storage (useful for debugging or testing CoW behavior):
+
+```swift
+var a = Point(x: 1, y: 2)
+let b = a
+
+a.isIdentical(to: b)  // true - same storage
+
+a.x = 10              // triggers copy
+
+a.isIdentical(to: b)  // false - different storage now
+```
 
 ## Limitations
 
