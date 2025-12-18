@@ -62,14 +62,18 @@ extension CoWMacro: MemberMacro {
             """
 
         // Generate initializer (only var properties)
-        let initializer = generateInitializer(properties: varProperties)
+        // Use struct's access level for the initializer
+        let initializer = generateInitializer(properties: varProperties, structAccessLevel: extractAccessLevel(from: structDecl.modifiers))
 
         // Generate isIdentical(to:) method
+        // Match access level to struct's declared visibility
         let structName = structDecl.name.text
+        let structAccessLevel = extractAccessLevel(from: structDecl.modifiers)
+        let isIdenticalAccess = structAccessLevel.map { "\($0) " } ?? ""
         let isIdentical: DeclSyntax = """
             /// Returns true if this value and the other value share the same underlying storage.
             /// This can be useful for debugging or testing Copy-on-Write behavior.
-            public func isIdentical(to other: \(raw: structName)) -> Bool {
+            \(raw: isIdenticalAccess)func isIdentical(to other: \(raw: structName)) -> Bool {
                 storage === other.storage
             }
             """
@@ -151,6 +155,16 @@ extension CoWMacro: ExtensionMacro {
                 includeDecodable: wantsDecodable
             )
             extensions.append(codableExt)
+        }
+
+        // Generate CustomStringConvertible extension if requested
+        if inheritedTypes.contains("CustomStringConvertible") {
+            let descriptionExt = try generateCustomStringConvertibleExtension(
+                typeName: type,
+                structName: structDecl.name.text,
+                properties: varProperties
+            )
+            extensions.append(descriptionExt)
         }
 
         return extensions
@@ -253,6 +267,25 @@ private func generateCodableExtension(
             }
             """
         }
+    }
+}
+
+private func generateCustomStringConvertibleExtension(
+    typeName: some TypeSyntaxProtocol,
+    structName: String,
+    properties: [StoredProperty]
+) throws -> ExtensionDeclSyntax {
+    let propertyDescriptions = properties.map { prop in
+        "\(prop.name): \\(\(prop.name))"
+    }.joined(separator: ", ")
+
+    // Don't re-declare conformance - struct already declares it
+    return try ExtensionDeclSyntax("extension \(typeName)") {
+        """
+        public var description: String {
+            "\(raw: structName)(\(raw: propertyDescriptions))"
+        }
+        """
     }
 }
 
@@ -475,6 +508,7 @@ private func generateStorageClass(properties: [StoredProperty]) -> DeclSyntax {
     }.joined(separator: "\n            ")
 
     return """
+        // MARK: - CoW Generated Storage
         private final class Storage: @unchecked Sendable {
             \(raw: storageProperties)
 
@@ -489,17 +523,9 @@ private func generateStorageClass(properties: [StoredProperty]) -> DeclSyntax {
         """
 }
 
-private func generateInitializer(properties: [StoredProperty]) -> DeclSyntax {
-    // Find the most permissive access level among properties
-    let accessLevels = properties.compactMap { $0.accessLevel }
-    let accessModifier: String
-    if accessLevels.contains("public") {
-        accessModifier = "public "
-    } else if accessLevels.contains("package") {
-        accessModifier = "package "
-    } else {
-        accessModifier = ""
-    }
+private func generateInitializer(properties: [StoredProperty], structAccessLevel: String?) -> DeclSyntax {
+    // Use struct's access level for the initializer
+    let accessModifier = structAccessLevel.map { "\($0) " } ?? ""
 
     // Generate initializer parameters
     let initParams = properties.map { prop -> String in
@@ -532,11 +558,11 @@ enum CoWMacroError: Error, CustomStringConvertible {
     var description: String {
         switch self {
         case .onlyApplicableToStruct:
-            return "@CoW can only be applied to structs"
+            return "@CoW can only be applied to structs. Classes, enums, and actors are not supported."
         case .noStoredProperties:
-            return "@CoW requires at least one stored property"
+            return "@CoW requires at least one stored property. Add a 'var' property to your struct."
         case .noVarProperties:
-            return "@CoW requires at least one var property (let properties are not included in CoW storage)"
+            return "@CoW requires at least one 'var' property. Change 'let' to 'var' or use 'private(set) var' for read-only properties."
         }
     }
 }

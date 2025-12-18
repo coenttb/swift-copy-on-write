@@ -55,6 +55,44 @@ struct CodablePerson: Codable {
     var age: Int
 }
 
+// Test type with CustomStringConvertible
+@CoW
+struct DescribablePoint: CustomStringConvertible {
+    var x: Int
+    var y: Int
+}
+
+// Test type with optional properties
+@CoW
+struct WithOptional {
+    var name: String
+    var nickname: String?
+    var age: Int = 0
+}
+
+// Test nested CoW structs
+@CoW
+struct Inner {
+    var value: Int
+}
+
+@CoW
+struct Outer {
+    var inner: Inner
+    var label: String
+}
+
+// Test struct with computed property (should be preserved)
+@CoW
+struct WithComputed {
+    var width: Int
+    var height: Int
+
+    var area: Int {
+        width * height
+    }
+}
+
 // MARK: - Tests
 
 @Suite("Copy on Write Macro Tests")
@@ -300,5 +338,98 @@ struct CopyOnWriteTests {
 
         #expect(decoded.name == original.name)
         #expect(decoded.age == original.age)
+    }
+
+    // MARK: - CustomStringConvertible Tests
+
+    @Test("CustomStringConvertible conformance works")
+    func customStringConvertible() {
+        let p = DescribablePoint(x: 10, y: 20)
+        let description = p.description
+
+        #expect(description.contains("DescribablePoint"))
+        #expect(description.contains("x: 10"))
+        #expect(description.contains("y: 20"))
+    }
+
+    @Test("CustomStringConvertible works with String interpolation")
+    func customStringConvertibleInterpolation() {
+        let p = DescribablePoint(x: 5, y: 15)
+        let str = "\(p)"
+
+        #expect(str == "DescribablePoint(x: 5, y: 15)")
+    }
+
+    // MARK: - Optional Property Tests
+
+    @Test("Optional properties work with CoW")
+    func optionalProperties() {
+        var w1 = WithOptional(name: "Test", nickname: nil)
+        #expect(w1.name == "Test")
+        #expect(w1.nickname == nil)
+        #expect(w1.age == 0)
+
+        w1.nickname = "Testy"
+        #expect(w1.nickname == "Testy")
+
+        let w2 = WithOptional(name: "Full", nickname: "Nick", age: 25)
+        #expect(w2.nickname == "Nick")
+        #expect(w2.age == 25)
+    }
+
+    @Test("Optional properties maintain value semantics")
+    func optionalPropertiesValueSemantics() {
+        var w1 = WithOptional(name: "Original", nickname: "Nick")
+        let w2 = w1
+
+        w1.nickname = "Changed"
+
+        #expect(w1.nickname == "Changed")
+        #expect(w2.nickname == "Nick")
+    }
+
+    // MARK: - Nested CoW Struct Tests
+
+    @Test("Nested CoW structs work")
+    func nestedCoWStructs() {
+        let inner = Inner(value: 42)
+        var outer = Outer(inner: inner, label: "Test")
+
+        #expect(outer.inner.value == 42)
+        #expect(outer.label == "Test")
+
+        outer.inner = Inner(value: 100)
+        #expect(outer.inner.value == 100)
+    }
+
+    @Test("Nested CoW structs maintain value semantics")
+    func nestedCoWValueSemantics() {
+        let inner = Inner(value: 42)
+        var outer1 = Outer(inner: inner, label: "Original")
+        let outer2 = outer1
+
+        // Mutate outer1's inner
+        outer1.inner = Inner(value: 999)
+
+        // outer2 should be unchanged
+        #expect(outer1.inner.value == 999)
+        #expect(outer2.inner.value == 42)
+    }
+
+    // MARK: - Computed Property Tests
+
+    @Test("Computed properties are preserved")
+    func computedProperties() {
+        let rect = WithComputed(width: 10, height: 5)
+        #expect(rect.area == 50)
+    }
+
+    @Test("Computed properties work with mutations")
+    func computedPropertiesWithMutation() {
+        var rect = WithComputed(width: 10, height: 5)
+        #expect(rect.area == 50)
+
+        rect.width = 20
+        #expect(rect.area == 100)
     }
 }
