@@ -252,7 +252,7 @@ private func generateCodableExtension(
 
         if includeDecodable {
             let decodeStatements = properties.map { prop in
-                "let \(prop.name) = try container.decode(\(prop.type.trimmedDescription).self, forKey: .\(prop.name))"
+                "let \(prop.name) = try container.decode(\(cleanTypeString(prop.type)).self, forKey: .\(prop.name))"
             }.joined(separator: "\n            ")
 
             let initArgs = properties.map { prop in
@@ -482,18 +482,31 @@ private func inferType(from expr: ExprSyntax) -> TypeSyntax? {
 
 // MARK: - Code Generation
 
+/// Safely convert TypeSyntax to a clean string representation.
+/// Uses `trimmed` to remove trivia, then `description` for the string.
+/// This handles edge cases like value generic parameters (e.g., `Size<1>`)
+/// better than `trimmedDescription` which can have issues with certain syntax.
+private func cleanTypeString(_ type: TypeSyntax) -> String {
+    type.trimmed.description
+}
+
+/// Safely convert ExprSyntax to a clean string representation.
+private func cleanExprString(_ expr: ExprSyntax) -> String {
+    expr.trimmed.description
+}
+
 private func generateStorageClass(properties: [StoredProperty]) -> DeclSyntax {
     // Generate storage properties
     let storageProperties = properties.map { prop -> String in
-        "var \(prop.name): \(prop.type.trimmedDescription)"
+        "var \(prop.name): \(cleanTypeString(prop.type))"
     }.joined(separator: "\n        ")
 
     // Generate primary initializer parameters
     let initParams = properties.map { prop -> String in
         if let defaultValue = prop.defaultValue {
-            return "\(prop.name): \(prop.type.trimmedDescription) = \(defaultValue.trimmedDescription)"
+            return "\(prop.name): \(cleanTypeString(prop.type)) = \(cleanExprString(defaultValue))"
         } else {
-            return "\(prop.name): \(prop.type.trimmedDescription)"
+            return "\(prop.name): \(cleanTypeString(prop.type))"
         }
     }.joined(separator: ", ")
 
@@ -530,9 +543,9 @@ private func generateInitializer(properties: [StoredProperty], structAccessLevel
     // Generate initializer parameters
     let initParams = properties.map { prop -> String in
         if let defaultValue = prop.defaultValue {
-            return "\(prop.name): \(prop.type.trimmedDescription) = \(defaultValue.trimmedDescription)"
+            return "\(prop.name): \(cleanTypeString(prop.type)) = \(cleanExprString(defaultValue))"
         } else {
-            return "\(prop.name): \(prop.type.trimmedDescription)"
+            return "\(prop.name): \(cleanTypeString(prop.type))"
         }
     }.joined(separator: ", ")
 
