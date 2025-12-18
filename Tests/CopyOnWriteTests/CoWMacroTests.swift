@@ -93,6 +93,38 @@ struct WithComputed {
     }
 }
 
+// MARK: - Complex Type Tests
+
+// Test labeled tuple array
+@CoW
+struct WithLabeledTupleArray {
+    var items: [(name: String, value: Int)]
+}
+
+// Test optional labeled tuple
+@CoW
+struct WithOptionalTuple {
+    var pair: (first: String, second: Int)?
+}
+
+// Test nested dictionary
+@CoW
+struct WithNestedGeneric {
+    var data: [String: [Int]]
+}
+
+// Test function type
+@CoW
+struct WithFunctionType {
+    var handler: ((Int) -> Void)?
+}
+
+// Test dictionary type
+@CoW
+struct WithDictionary {
+    var mapping: [String: Int]
+}
+
 // MARK: - Tests
 
 @Suite("Copy on Write Macro Tests")
@@ -431,5 +463,86 @@ struct CopyOnWriteTests {
 
         rect.width = 20
         #expect(rect.area == 100)
+    }
+
+    // MARK: - Complex Type Tests
+
+    @Test("Labeled tuple array works")
+    func labeledTupleArray() {
+        var s = WithLabeledTupleArray(items: [(name: "a", value: 1), (name: "b", value: 2)])
+        #expect(s.items.count == 2)
+        #expect(s.items[0].name == "a")
+        #expect(s.items[0].value == 1)
+
+        s.items.append((name: "c", value: 3))
+        #expect(s.items.count == 3)
+    }
+
+    @Test("Labeled tuple array maintains value semantics")
+    func labeledTupleArrayValueSemantics() {
+        var s1 = WithLabeledTupleArray(items: [(name: "a", value: 1)])
+        let s2 = s1
+
+        s1.items.append((name: "b", value: 2))
+
+        #expect(s1.items.count == 2)
+        #expect(s2.items.count == 1)
+    }
+
+    @Test("Optional labeled tuple works")
+    func optionalLabeledTuple() {
+        var s = WithOptionalTuple(pair: (first: "hello", second: 42))
+        #expect(s.pair?.first == "hello")
+        #expect(s.pair?.second == 42)
+
+        s.pair = nil
+        #expect(s.pair == nil)
+
+        s.pair = (first: "world", second: 100)
+        #expect(s.pair?.first == "world")
+    }
+
+    @Test("Nested generic dictionary works")
+    func nestedGenericDictionary() {
+        var s = WithNestedGeneric(data: ["a": [1, 2, 3], "b": [4, 5]])
+        #expect(s.data["a"]?.count == 3)
+        #expect(s.data["b"]?.count == 2)
+
+        s.data["c"] = [6, 7, 8, 9]
+        #expect(s.data["c"]?.count == 4)
+    }
+
+    @Test("Function type works")
+    func functionType() {
+        var callCount = 0
+        var s = WithFunctionType(handler: { _ in callCount += 1 })
+
+        s.handler?(42)
+        #expect(callCount == 1)
+
+        s.handler = nil
+        s.handler?(42)
+        #expect(callCount == 1)  // Still 1 because handler is nil
+    }
+
+    @Test("Dictionary type works")
+    func dictionaryType() {
+        var s = WithDictionary(mapping: ["a": 1, "b": 2])
+        #expect(s.mapping["a"] == 1)
+        #expect(s.mapping["b"] == 2)
+
+        s.mapping["c"] = 3
+        #expect(s.mapping["c"] == 3)
+    }
+
+    @Test("Dictionary type maintains value semantics")
+    func dictionaryValueSemantics() {
+        var s1 = WithDictionary(mapping: ["a": 1])
+        let s2 = s1
+
+        s1.mapping["b"] = 2
+
+        #expect(s1.mapping.count == 2)
+        #expect(s2.mapping.count == 1)
     }
 }
