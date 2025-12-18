@@ -25,16 +25,22 @@ And add `"CopyOnWrite"` to your target's dependencies.
 
 ## Usage
 
-Simply annotate your struct with `@CoW`:
+Simply annotate your struct with `@Copy on Write` (or the shorter alias `@CoW`):
 
 ```swift
 import CopyOnWrite
 
-@CoW
+@`Copy on Write`
 public struct Context {
     public var layoutBox: Rectangle
     public var style: Style
     internal var counter: Int = 0
+}
+
+// Or using the shorter alias:
+@CoW
+public struct AnotherContext {
+    public var value: Int
 }
 ```
 
@@ -42,7 +48,7 @@ The macro transforms your struct to use Copy-on-Write semantics automatically.
 
 ## What It Generates
 
-The `@CoW` macro expands your struct to include:
+The `@Copy on Write` macro expands your struct to include:
 
 1. **Private Storage class** - Holds all properties on the heap
 2. **Computed properties** - Delegate to storage with CoW checks
