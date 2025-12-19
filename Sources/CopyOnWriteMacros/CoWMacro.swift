@@ -480,28 +480,101 @@ private func inferType(from expr: ExprSyntax) -> TypeSyntax? {
     return nil
 }
 
+/// Check if a type is optional (ends with ? or is Optional<T>)
+private func isOptionalType(_ type: TypeSyntax) -> Bool {
+    // Direct optional type: T?
+    if type.is(OptionalTypeSyntax.self) {
+        return true
+    }
+    // Implicitly unwrapped optional: T!
+    if type.is(ImplicitlyUnwrappedOptionalTypeSyntax.self) {
+        return true
+    }
+    // Optional<T> syntax
+    if let identifier = type.as(IdentifierTypeSyntax.self),
+       identifier.name.text == "Optional" {
+        return true
+    }
+    return false
+}
+
 // MARK: - Code Generation
 
 /// Safely convert TypeSyntax to a clean string representation.
-/// Uses description and trims whitespace for clean output.
+/// Uses token-based reconstruction to correctly handle all type forms,
+/// including value generic parameters (e.g., `Size<1>`) in Swift 6.
 private func cleanTypeString(_ type: TypeSyntax) -> String {
-    // Get raw description and clean it up
-    var result = type.description
-    // Remove leading/trailing whitespace
-    result = result.trimmingCharacters(in: .whitespacesAndNewlines)
-    // Collapse multiple whitespace to single space
-    while result.contains("  ") {
-        result = result.replacingOccurrences(of: "  ", with: " ")
+    // Collect all tokens and join them with appropriate spacing.
+    // This bypasses SwiftSyntax's problematic description for value generics.
+    var result = ""
+    var previousToken: String = ""
+
+    for token in type.tokens(viewMode: .sourceAccurate) {
+        let text = token.text
+
+        // Skip empty tokens
+        guard !text.isEmpty else { continue }
+
+        // Determine if we need a space before this token
+        if !result.isEmpty && needsSpaceBetween(previousToken, text) {
+            result += " "
+        }
+
+        result += text
+        previousToken = text
     }
+
     return result
+}
+
+/// Determine if a space is needed between two tokens.
+private func needsSpaceBetween(_ prev: String, _ next: String) -> Bool {
+    // No space after opening brackets/parens
+    if prev == "(" || prev == "[" || prev == "<" { return false }
+
+    // No space before closing brackets/parens
+    if next == ")" || next == "]" || next == ">" { return false }
+
+    // No space before or after dot
+    if prev == "." || next == "." { return false }
+
+    // No space before comma, after comma needs space
+    if next == "," { return false }
+    if prev == "," { return true }
+
+    // No space before colon in type annotation, space after
+    if next == ":" { return false }
+    if prev == ":" { return true }
+
+    // No space before or after question mark (optional)
+    if next == "?" || prev == "?" { return false }
+
+    // No space before or after exclamation mark (IUO)
+    if next == "!" || prev == "!" { return false }
+
+    // No space before or after ampersand in composition types
+    if prev == "&" || next == "&" { return true }
+
+    // Space around arrow
+    if prev == "->" || next == "->" { return true }
+
+    // Space after keywords
+    if prev == "some" || prev == "any" || prev == "inout" ||
+       prev == "repeat" || prev == "each" || prev == "throws" ||
+       prev == "async" || prev == "rethrows" {
+        return true
+    }
+
+    // Default: no space (most tokens are joined directly)
+    return false
 }
 
 /// Safely convert ExprSyntax to a clean string representation.
 private func cleanExprString(_ expr: ExprSyntax) -> String {
-    var result = expr.description
-    result = result.trimmingCharacters(in: .whitespacesAndNewlines)
+    var result = expr.trimmedDescription
+    // Collapse multiple whitespace to single space
     while result.contains("  ") {
-        result = result.replacingOccurrences(of: "  ", with: " ")
+        result = result.replacing("  ", with: " ")
     }
     return result
 }
@@ -513,11 +586,15 @@ private func generateStorageClass(properties: [StoredProperty]) -> DeclSyntax {
     }.joined(separator: "\n        ")
 
     // Generate primary initializer parameters
+    // Optional types without explicit defaults get `= nil`
     let initParams = properties.map { prop -> String in
+        let typeStr = cleanTypeString(prop.type)
         if let defaultValue = prop.defaultValue {
-            return "\(prop.name): \(cleanTypeString(prop.type)) = \(cleanExprString(defaultValue))"
+            return "\(prop.name): \(typeStr) = \(cleanExprString(defaultValue))"
+        } else if isOptionalType(prop.type) {
+            return "\(prop.name): \(typeStr) = nil"
         } else {
-            return "\(prop.name): \(cleanTypeString(prop.type))"
+            return "\(prop.name): \(typeStr)"
         }
     }.joined(separator: ", ")
 
@@ -552,11 +629,15 @@ private func generateInitializer(properties: [StoredProperty], structAccessLevel
     let accessModifier = structAccessLevel.map { "\($0) " } ?? ""
 
     // Generate initializer parameters
+    // Optional types without explicit defaults get `= nil`
     let initParams = properties.map { prop -> String in
+        let typeStr = cleanTypeString(prop.type)
         if let defaultValue = prop.defaultValue {
-            return "\(prop.name): \(cleanTypeString(prop.type)) = \(cleanExprString(defaultValue))"
+            return "\(prop.name): \(typeStr) = \(cleanExprString(defaultValue))"
+        } else if isOptionalType(prop.type) {
+            return "\(prop.name): \(typeStr) = nil"
         } else {
-            return "\(prop.name): \(cleanTypeString(prop.type))"
+            return "\(prop.name): \(typeStr)"
         }
     }.joined(separator: ", ")
 

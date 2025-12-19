@@ -125,6 +125,17 @@ struct WithDictionary {
     var mapping: [String: Int]
 }
 
+// Test value generic parameters (Swift 6 feature)
+struct ValueGeneric<let N: Int> {
+    var value: Int
+}
+
+@CoW
+struct WithValueGeneric {
+    var size: ValueGeneric<1>
+    var optionalSize: ValueGeneric<2>?
+}
+
 // MARK: - Tests
 
 @Suite("Copy on Write Macro Tests")
@@ -544,5 +555,25 @@ struct CopyOnWriteTests {
 
         #expect(s1.mapping.count == 2)
         #expect(s2.mapping.count == 1)
+    }
+
+    // MARK: - Value Generic Parameter Tests
+
+    @Test("Value generic parameters work")
+    func valueGenericParameters() {
+        let s = WithValueGeneric(size: ValueGeneric(value: 42), optionalSize: ValueGeneric(value: 100))
+        #expect(s.size.value == 42)
+        #expect(s.optionalSize?.value == 100)
+    }
+
+    @Test("Value generic parameters maintain value semantics")
+    func valueGenericValueSemantics() {
+        var s1 = WithValueGeneric(size: ValueGeneric(value: 42), optionalSize: nil)
+        let s2 = s1
+
+        s1.size = ValueGeneric(value: 999)
+
+        #expect(s1.size.value == 999)
+        #expect(s2.size.value == 42)
     }
 }
