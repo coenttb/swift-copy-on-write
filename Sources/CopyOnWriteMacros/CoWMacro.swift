@@ -483,16 +483,16 @@ private func inferType(from expr: ExprSyntax) -> TypeSyntax? {
 // MARK: - Code Generation
 
 /// Safely convert TypeSyntax to a clean string representation.
-/// Uses `trimmed` to remove trivia, then `description` for the string.
-/// This handles edge cases like value generic parameters (e.g., `Size<1>`)
-/// better than `trimmedDescription` which can have issues with certain syntax.
+/// Handles edge cases like value generic parameters (e.g., `Size<1>`)
+/// by using formatted() which properly handles all syntax nodes.
 private func cleanTypeString(_ type: TypeSyntax) -> String {
-    type.trimmed.description
+    // Use formatted() for the most reliable output
+    type.formatted().description
 }
 
 /// Safely convert ExprSyntax to a clean string representation.
 private func cleanExprString(_ expr: ExprSyntax) -> String {
-    expr.trimmed.description
+    expr.formatted().description
 }
 
 private func generateStorageClass(properties: [StoredProperty]) -> DeclSyntax {
