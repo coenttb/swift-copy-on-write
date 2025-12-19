@@ -483,16 +483,27 @@ private func inferType(from expr: ExprSyntax) -> TypeSyntax? {
 // MARK: - Code Generation
 
 /// Safely convert TypeSyntax to a clean string representation.
-/// Handles edge cases like value generic parameters (e.g., `Size<1>`)
-/// by using formatted() which properly handles all syntax nodes.
+/// Uses description and trims whitespace for clean output.
 private func cleanTypeString(_ type: TypeSyntax) -> String {
-    // Use formatted() for the most reliable output
-    type.formatted().description
+    // Get raw description and clean it up
+    var result = type.description
+    // Remove leading/trailing whitespace
+    result = result.trimmingCharacters(in: .whitespacesAndNewlines)
+    // Collapse multiple whitespace to single space
+    while result.contains("  ") {
+        result = result.replacingOccurrences(of: "  ", with: " ")
+    }
+    return result
 }
 
 /// Safely convert ExprSyntax to a clean string representation.
 private func cleanExprString(_ expr: ExprSyntax) -> String {
-    expr.formatted().description
+    var result = expr.description
+    result = result.trimmingCharacters(in: .whitespacesAndNewlines)
+    while result.contains("  ") {
+        result = result.replacingOccurrences(of: "  ", with: " ")
+    }
+    return result
 }
 
 private func generateStorageClass(properties: [StoredProperty]) -> DeclSyntax {
