@@ -14,8 +14,8 @@ let package = Package(
     ],
     products: [
         .library(
-            name: "CopyOnWrite",
-            targets: ["CopyOnWrite"]
+            name: "Copy on Write",
+            targets: ["Copy on Write"]
         ),
     ],
     dependencies: [
@@ -24,13 +24,13 @@ let package = Package(
     targets: [
         // Public API - the @CoW macro declaration
         .target(
-            name: "CopyOnWrite",
-            dependencies: ["CopyOnWriteMacros"]
+            name: "Copy on Write",
+            dependencies: ["Copy on Write Macros"]
         ),
 
         // Macro implementation - compiler plugin
         .macro(
-            name: "CopyOnWriteMacros",
+            name: "Copy on Write Macros",
             dependencies: [
                 .product(name: "SwiftSyntax", package: "swift-syntax"),
                 .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
@@ -40,10 +40,10 @@ let package = Package(
 
         // Tests
         .testTarget(
-            name: "CopyOnWriteTests",
+            name: "Copy on Write Tests",
             dependencies: [
-                "CopyOnWrite",
-                "CopyOnWriteMacros",
+                "Copy on Write",
+                "Copy on Write Macros",
                 .product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax"),
             ]
         ),

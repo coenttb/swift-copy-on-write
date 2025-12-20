@@ -21,14 +21,14 @@ dependencies: [
 ]
 ```
 
-And add `"CopyOnWrite"` to your target's dependencies.
+And add `"Copy on Write"` to your target's dependencies.
 
 ## Usage
 
 Annotate your struct with `@Copy on Write` (or the abbreviation `@CoW`):
 
 ```swift
-import CopyOnWrite
+import Copy_on_Write
 
 @CoW
 struct Context {

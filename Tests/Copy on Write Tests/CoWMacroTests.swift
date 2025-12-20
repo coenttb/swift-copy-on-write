@@ -2,7 +2,7 @@
 
 import Foundation
 import Testing
-import CopyOnWrite
+import Copy_on_Write
 
 // MARK: - Test Types
 
